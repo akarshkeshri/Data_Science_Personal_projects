@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Career Ruiner Snake Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            border: 2px solid #333;
+            background-color: #fff;
+        }
+        
+        #game-info {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        #score {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        
+        #message-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .modal-content h2 {
+            margin-top: 0;
+        }
+        
+        .image-upload {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .image-upload input {
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Career Ruiner Snake Game</h1>
+    
+    <div class="image-upload">
+        <label for="head-image">Upload Snake Head Image:</label>
+        <input type="file" id="head-image" accept="image/*">
+        
+        <label for="tail-image">Upload Snake Tail Image:</label>
+        <input type="file" id="tail-image" accept="image/*">
+        
+        <button id="start-game">Start Game</button>
+    </div>
+    
+    <div id="game-container"></div>
+    
+    <div id="game-info">
+        <div id="score">Score: 0 / 60</div>
+        <button id="restart" style="display: none;">Restart Game</button>
+    </div>
+    
+    <div id="message-modal">
+        <div class="modal-content">
+            <h2>Congratulations!</h2>
+            <p>You have successfully ruined many engineer careers. You are a perfect boss for MSIL. Take retirement now.</p>
+            <button id="close-modal">OK</button>
+        </div>
+    </div>
+    
+    <script>
+        class SnakeGame {
+            constructor(containerId, width, height, cellSize) {
+                this.container = document.getElementById(containerId);
+                this.width = width;
+                this.height = height;
+                this.cellSize = cellSize;
+                this.canvas = document.createElement('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.score = 0;
+                this.maxScore = 60;
+                this.gameOver = false;
+                this.headImage = new Image();
+                this.tailImage = new Image();
+                this.foodImage = new Image();
+                
+                // Default brain image for food
+                this.foodImage.src = '/api/placeholder/40/40';
+                
+                this.canvas.width = width * cellSize;
+                this.canvas.height = height * cellSize;
+                this.container.appendChild(this.canvas);
+                
+                this.snake = [{ x: 5, y: 5 }]; // Start with head only
+                this.direction = 'right';
+                this.nextDirection = 'right';
+                this.food = this.generateFood();
+                
+                this.lastRenderTime = 0;
+                this.gameSpeed = 100; // milliseconds between updates
+            }
+            
+            setHeadImage(src) {
+                this.headImage.src = src;
+            }
+            
+            setTailImage(src) {
+                this.tailImage.src = src;
+            }
+            
+            start() {
+                document.addEventListener('keydown', this.handleKeyPress.bind(this));
+                this.gameLoop();
+            }
+            
+            gameLoop(currentTime) {
+                if (this.gameOver) return;
+                
+                window.requestAnimationFrame(this.gameLoop.bind(this));
+                
+                const secondsSinceLastRender = (currentTime - this.lastRenderTime) / 1000;
+                
+                if (secondsSinceLastRender < this.gameSpeed / 1000) return;
+                
+                this.lastRenderTime = currentTime;
+                
+                this.update();
+                this.draw();
+            }
+            
+            update() {
+                if (this.gameOver) return;
+                
+                this.direction = this.nextDirection;
+                
+                const head = { ...this.snake[0] };
+                
+                switch (this.direction) {
+                    case 'up':
+                        head.y -= 1;
+                        break;
+                    case 'down':
+                        head.y += 1;
+                        break;
+                    case 'left':
+                        head.x -= 1;
+                        break;
+                    case 'right':
+                        head.x += 1;
+                        break;
+                }
+                
+                // Check for collisions with walls
+                if (head.x < 0 || head.x >= this.width || head.y < 0 || head.y >= this.height) {
+                    this.gameOver = true;
+                    document.getElementById('restart').style.display = 'block';
+                    return;
+                }
+                
+                // Check for collisions with self
+                for (let i = 0; i < this.snake.length; i++) {
+                    if (head.x === this.snake[i].x && head.y === this.snake[i].y) {
+                        this.gameOver = true;
+                        document.getElementById('restart').style.display = 'block';
+                        return;
+                    }
+                }
+                
+                this.snake.unshift(head);
+                
+                // Check if snake eats food
+                if (head.x === this.food.x && head.y === this.food.y) {
+                    this.score++;
+                    document.getElementById('score').textContent = `Score: ${this.score} / ${this.maxScore}`;
+                    
+                    if (this.score >= this.maxScore) {
+                        this.gameOver = true;
+                        document.getElementById('message-modal').style.display = 'block';
+                        document.getElementById('restart').style.display = 'block';
+                        return;
+                    }
+                    
+                    this.food = this.generateFood();
+                } else {
+                    this.snake.pop();
+                }
+            }
+            
+            draw() {
+                // Clear canvas
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw snake
+                for (let i = 0; i < this.snake.length; i++) {
+                    const segment = this.snake[i];
+                    const x = segment.x * this.cellSize;
+                    const y = segment.y * this.cellSize;
+                    
+                    if (i === 0 && this.headImage.complete && this.headImage.naturalWidth > 0) {
+                        // Draw head with image
+                        this.ctx.drawImage(this.headImage, x, y, this.cellSize, this.cellSize);
+                    } else if (i > 0 && this.tailImage.complete && this.tailImage.naturalWidth > 0) {
+                        // Draw tail with image
+                        this.ctx.drawImage(this.tailImage, x, y, this.cellSize, this.cellSize);
+                    } else {
+                        // Fallback colors
+                        this.ctx.fillStyle = i === 0 ? '#333' : '#666';
+                        this.ctx.fillRect(x, y, this.cellSize, this.cellSize);
+                    }
+                }
+                
+                // Draw food
+                const foodX = this.food.x * this.cellSize;
+                const foodY = this.food.y * this.cellSize;
+                
+                if (this.foodImage.complete && this.foodImage.naturalWidth > 0) {
+                    this.ctx.drawImage(this.foodImage, foodX, foodY, this.cellSize, this.cellSize);
+                } else {
+                    this.ctx.fillStyle = 'red';
+                    this.ctx.fillRect(foodX, foodY, this.cellSize, this.cellSize);
+                }
+            }
+            
+            generateFood() {
+                let newFood;
+                let foodOnSnake;
+                
+                do {
+                    foodOnSnake = false;
+                    newFood = {
+                        x: Math.floor(Math.random() * this.width),
+                        y: Math.floor(Math.random() * this.height)
+                    };
+                    
+                    for (const segment of this.snake) {
+                        if (segment.x === newFood.x && segment.y === newFood.y) {
+                            foodOnSnake = true;
+                            break;
+                        }
+                    }
+                } while (foodOnSnake);
+                
+                return newFood;
+            }
+            
+            handleKeyPress(e) {
+                switch (e.key) {
+                    case 'ArrowUp':
+                        if (this.direction !== 'down') this.nextDirection = 'up';
+                        break;
+                    case 'ArrowDown':
+                        if (this.direction !== 'up') this.nextDirection = 'down';
+                        break;
+                    case 'ArrowLeft':
+                        if (this.direction !== 'right') this.nextDirection = 'left';
+                        break;
+                    case 'ArrowRight':
+                        if (this.direction !== 'left') this.nextDirection = 'right';
+                        break;
+                }
+            }
+            
+            restart() {
+                this.snake = [{ x: 5, y: 5 }];
+                this.direction = 'right';
+                this.nextDirection = 'right';
+                this.food = this.generateFood();
+                this.score = 0;
+                this.gameOver = false;
+                document.getElementById('score').textContent = `Score: ${this.score} / ${this.maxScore}`;
+                document.getElementById('restart').style.display = 'none';
+                this.lastRenderTime = 0;
+                this.gameLoop();
+            }
+        }
+        
+        let game;
+        
+        document.getElementById('start-game').addEventListener('click', () => {
+            const container = document.getElementById('game-container');
+            
+            // Clear any previous game
+            container.innerHTML = '';
+            
+            // Create new game
+            game = new SnakeGame('game-container', 20, 15, 25);
+            
+            // Set images
+            const headImageInput = document.getElementById('head-image');
+            if (headImageInput.files.length > 0) {
+                const headImageURL = URL.createObjectURL(headImageInput.files[0]);
+                game.setHeadImage(headImageURL);
+            }
+            
+            const tailImageInput = document.getElementById('tail-image');
+            if (tailImageInput.files.length > 0) {
+                const tailImageURL = URL.createObjectURL(tailImageInput.files[0]);
+                game.setTailImage(tailImageURL);
+            }
+            
+            game.start();
+            document.getElementById('restart').style.display = 'none';
+        });
+        
+        document.getElementById('restart').addEventListener('click', () => {
+            document.getElementById('message-modal').style.display = 'none';
+            game.restart();
+        });
+        
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('message-modal').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
